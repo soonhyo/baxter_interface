@@ -58,6 +58,11 @@ import baxter_dataflow
 import baxter_interface
 
 
+# Python2's xrange equals Python3's range, and xrange is removed on Python3
+if not hasattr(__builtins__, 'xrange'):
+    xrange = range
+
+
 class JointTrajectoryActionServer(object):
     def __init__(self, limb, reconfig_server, rate=100.0,
                  mode='position_w_id', interpolation='bezier'):
@@ -203,10 +208,11 @@ class JointTrajectoryActionServer(object):
         self._fdbk.desired.time_from_start = rospy.Duration.from_sec(cur_time)
         self._fdbk.actual.positions = self._get_current_position(jnt_names)
         self._fdbk.actual.time_from_start = rospy.Duration.from_sec(cur_time)
-        self._fdbk.error.positions = map(operator.sub,
-                                         self._fdbk.desired.positions,
-                                         self._fdbk.actual.positions
-                                        )
+        self._fdbk.error.positions = list(map(operator.sub,
+                                              self._fdbk.desired.positions,
+                                              self._fdbk.actual.positions
+                                             )
+                                         )
         self._fdbk.error.time_from_start = rospy.Duration.from_sec(cur_time)
         self._server.publish_feedback(self._fdbk)
 
