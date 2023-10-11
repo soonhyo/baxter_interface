@@ -28,6 +28,8 @@
 """
 Baxter RSDK Joint Trajectory Action Server
 """
+from __future__ import absolute_import
+
 import bisect
 from copy import deepcopy
 import math
