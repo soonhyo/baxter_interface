@@ -1,7 +1,7 @@
 import rospy
 import numpy as np
 
-class IMP(object):
+class CartIMP(object):
     def __init__(self, goal=0.0, trajectory=0.0,
                  null_damping=0.0, null_stiffness=0.0,
                  cart_stiffness={}, cart_damping={}):
