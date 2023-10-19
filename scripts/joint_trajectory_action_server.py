@@ -64,6 +64,9 @@ def start_server(limb, rate, mode, interpolation):
     elif mode == 'position':
         dyn_cfg_srv = Server(PositionJointTrajectoryActionServerConfig,
                              lambda config, level: config)
+    elif mode == 'impedance':
+        dyn_cfg_srv = Server(ImpedanceJointTrajectoryActionServerConfig,
+                             lambda config, level: config)
     else:
         dyn_cfg_srv = Server(PositionFFJointTrajectoryActionServerConfig,
                              lambda config, level: config)
@@ -99,7 +102,7 @@ def main():
     )
     parser.add_argument(
         "-m", "--mode", default='position_w_id',
-        choices=['position_w_id', 'position', 'velocity'],
+        choices=['position_w_id', 'position', 'velocity', 'impedance'],
         help="control mode for trajectory execution"
     )
     parser.add_argument(

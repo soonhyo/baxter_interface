@@ -86,10 +86,10 @@ class JointTrajectoryActionServer(object):
         # Verify joint control mode
         self._mode = mode
         if (self._mode != 'position' and self._mode != 'position_w_id'
-            and self._mode != 'velocity'):
+            and self._mode != 'velocity' and self._mode != 'impedance'):
             rospy.logerr("%s: Action Server Creation Failed - "
                          "Provided Invalid Joint Control Mode '%s' (Options: "
-                         "'position_w_id', 'position', 'velocity')" %
+                         "'position_w_id', 'position', 'velocity', 'impedance')" %
                     (self._action_name, self._mode,))
             return
         self._server.start()
@@ -187,6 +187,12 @@ class JointTrajectoryActionServer(object):
 
             # PID gains if executing using the velocity (integral) controller
             if self._mode == 'velocity':
+                self._pid[jnt].set_kp(self._dyn.config[jnt + '_kp'])
+                self._pid[jnt].set_ki(self._dyn.config[jnt + '_ki'])
+                self._pid[jnt].set_kd(self._dyn.config[jnt + '_kd'])
+                self._pid[jnt].initialize()
+
+            if self._mode == 'impedance':
                 self._pid[jnt].set_kp(self._dyn.config[jnt + '_kp'])
                 self._pid[jnt].set_ki(self._dyn.config[jnt + '_ki'])
                 self._pid[jnt].set_kd(self._dyn.config[jnt + '_kd'])
