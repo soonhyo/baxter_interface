@@ -113,6 +113,7 @@ class JointTrajectoryActionServer(object):
         self._pid = dict()
         for joint in self._limb.joint_names():
             self._pid[joint] = baxter_control.PID()
+        self._imp = baxter_control.IMP()
 
         # Create our spline coefficients
         self._coeff = [None] * len(self._limb.joint_names())
@@ -193,10 +194,11 @@ class JointTrajectoryActionServer(object):
                 self._pid[jnt].initialize()
 
             if self._mode == 'impedance':
-                self._pid[jnt].set_kp(self._dyn.config[jnt + '_kp'])
-                self._pid[jnt].set_ki(self._dyn.config[jnt + '_ki'])
-                self._pid[jnt].set_kd(self._dyn.config[jnt + '_kd'])
-                self._pid[jnt].initialize()
+                self.imp.set_null_damping()
+                self.imp.set_null_stiffness()
+                self.imp.set_cart_stiffness()
+                self.imp.set_cart_damping()
+                self._imp.initialize()
 
     def _get_current_position(self, joint_names):
         return [self._limb.joint_angle(joint) for joint in joint_names]

@@ -1,7 +1,7 @@
 import rospy
 import numpy as np
 
-class PID(object):
+class IMP(object):
     def __init__(self, goal=0.0, trajectory=0.0,
                  null_damping=0.0, null_stiffness=0.0,
                  cart_stiffness={}, cart_damping={}):
@@ -23,12 +23,6 @@ class PID(object):
         self._prev_err = 0.0
         self._cur_time = rospy.get_time()
         self._prev_time = self._cur_time
-
-    def set_goal(self, goal):
-        self._goal = goal
-
-    def set_trajectory(self, trajectory):
-        self._trajectory = trajectory
 
     def set_null_damping(self, null_damping):
         self._null_damping = null_damping

@@ -39,6 +39,8 @@ class PID(object):
         self._cur_time = rospy.get_time()
         self._prev_time = self._cur_time
 
+
+
         self._prev_err = 0.0
 
         # reset result variables
