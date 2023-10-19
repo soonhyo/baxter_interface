@@ -86,10 +86,10 @@ class JointTrajectoryActionServer(object):
         # Verify joint control mode
         self._mode = mode
         if (self._mode != 'position' and self._mode != 'position_w_id'
-            and self._mode != 'velocity' and self._mode != 'impedance'):
+            and self._mode != 'velocity' and self._mode != 'cart_impedance'):
             rospy.logerr("%s: Action Server Creation Failed - "
                          "Provided Invalid Joint Control Mode '%s' (Options: "
-                         "'position_w_id', 'position', 'velocity', 'impedance')" %
+                         "'position_w_id', 'position', 'velocity', 'cart_impedance')" %
                     (self._action_name, self._mode,))
             return
         self._server.start()
@@ -113,7 +113,7 @@ class JointTrajectoryActionServer(object):
         self._pid = dict()
         for joint in self._limb.joint_names():
             self._pid[joint] = baxter_control.PID()
-        self._imp = baxter_control.IMP()
+        self._cart_imp = baxter_control.CartIMP()
 
         # Create our spline coefficients
         self._coeff = [None] * len(self._limb.joint_names())
@@ -193,7 +193,7 @@ class JointTrajectoryActionServer(object):
                 self._pid[jnt].set_kd(self._dyn.config[jnt + '_kd'])
                 self._pid[jnt].initialize()
 
-            if self._mode == 'impedance':
+            if self._mode == 'cart_impedance':
                 self.imp.set_null_damping()
                 self.imp.set_null_stiffness()
                 self.imp.set_cart_stiffness()
@@ -283,6 +283,7 @@ class JointTrajectoryActionServer(object):
             self._command_stop(joint_names, self._limb.joint_angles(), start_time, dimensions_dict)
             return False
         velocities = []
+        efforts = []
         deltas = self._get_current_error(joint_names, point.positions)
         for delta in deltas:
             if ((math.fabs(delta[1]) >= self._path_thresh[delta[0]]
@@ -295,6 +296,8 @@ class JointTrajectoryActionServer(object):
                 return False
             if self._mode == 'velocity':
                 velocities.append(self._pid[delta[0]].compute_output(delta[1]))
+            if self._mode == 'cart_impedance':
+                efforts.append(self.Imp[delta[0]].compute_output(delta[1]))
         if ((self._mode == 'position' or self._mode == 'position_w_id')
               and self._alive):
             cmd = dict(zip(joint_names, point.positions))
@@ -303,9 +306,13 @@ class JointTrajectoryActionServer(object):
             if raw_pos_mode:
                 ff_pnt = self._reorder_joints_ff_cmd(joint_names, point)
                 self._pub_ff_cmd.publish(ff_pnt)
-        elif self._alive:
+        elif (self._mode == 'velocity' and self._alive):
             cmd = dict(zip(joint_names, velocities))
             self._limb.set_joint_velocities(cmd)
+        elif (self._mode == 'cart_impedance' and self._alive):
+            cmd = dict(zip(joint_names, torque))
+            self._limb.set_joint_torques(cmd)
+
         return True
 
     def _get_bezier_point(self, b_matrix, idx, t, cmd_time, dimensions_dict):

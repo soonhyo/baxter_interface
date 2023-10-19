@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-
 import numpy as np
-from scipy.linalg import pinv
-
 
 def calculate_orientation_error(orientation_d, orientation):
     if np.dot(orientation_d.coeffs(), orientation.coeffs()) < 0.0:
@@ -10,7 +7,6 @@ def calculate_orientation_error(orientation_d, orientation):
     error_quaternion = orientation * orientation_d.inverse()
     error_quaternion_angle_axis = error_quaternion.to_rotation_vector()
     return error_quaternion_angle_axis
-
 
 def filtered_update(target, current, filter):
     return (1.0 - filter) * current + filter * target
@@ -31,12 +27,17 @@ def saturate_torque_rate(tau_d_calculated, tau_d_saturated, delta_tau_max):
 def damping_rule(stiffness):
     return 2 * math.sqrt(stiffness)
 
+def quaternion_multiply(quaternion1, quaternion0):
+    w0, x0, y0, z0 = quaternion0
+    w1, x1, y1, z1 = quaternion1
+    return np.array([-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
+                     x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
+                     -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
+                     x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0], dtype=np.float64)
 
 class CartesianImpedanceController:
-    def __init__(self):
-        self.set_stiffness(np.array([200, 200, 200, 20, 20, 20, 0]))
-        self.cartesian_stiffness = self.cartesian_stiffness_target
-        self.cartesian_damping = self.cartesian_damping_target
+    def __init__(self, limb, reconfig_server):
+        pass
 
     def init_desired_pose(self, position_d_target, orientation_d_target):
         self.set_reference_pose(position_d_target, orientation_d_target)
@@ -63,13 +64,13 @@ class CartesianImpedanceController:
         if auto_damping:
             self.applyDamping()
 
-    def set_stiffness_(self, t_x, t_y, t_z, r_x, r_y, r_z, n, auto_damping=True):
+    def set_stiffness_n(self, t_x, t_y, t_z, r_x, r_y, r_z, n, auto_damping=True):
         stiffness_vector = np.array([t_x, t_y, t_z, r_x, r_y, r_z, n])
-        self.set_stiff_ness(stiffness_vector, auto_damping)
+        self.set_stiffness(stiffness_vector, auto_damping)
 
     def set_stiffness_target(self, t_x, t_y, t_z, r_x, r_y, r_z, auto_damping=True):
         stiffness_vector = np.array([t_x, t_y, t_z, r_x, r_y, r_z, self.nullspace_stiffness_target])
-        self.set_stiff_ness(stiffness_vector, auto_damping)
+        self.set_stiffness(stiffness_vector, auto_damping)
 
     def setDampingFactors(self, d_x, d_y, d_z, d_a, d_b, d_c, d_n):
         damping_new = np.array([d_x, d_y, d_z, d_a, d_b, d_c, d_n])
@@ -135,6 +136,7 @@ class CartesianImpedanceController:
 
         # Kinematic pseudo-inverse
         jacobian_transpose_pinv = np.linalg.pinv(self.jacobian.T)
+        kin.jacobian_pseudo_inverse()
 
         # Initialize torque vectors
         tau_task = np.zeros(self.n_joints)
@@ -175,7 +177,6 @@ class CartesianImpedanceController:
         cartesian_damping = np.copy(self.cartesian_damping_)
 
         return position_d, orientation_d, cartesian_stiffness, nullspace_stiffness, q_d_nullspace, cartesian_damping
-
 
     def get_last_commands(self):
         return np.copy(self.tau_c_)
