@@ -26,4 +26,5 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from .pid import PID
+from .cartesian_impedance import CartesianImpedanceController
 from .cart_imp import CartIMP
