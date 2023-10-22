@@ -42,7 +42,11 @@ from baxter_interface.cfg import (
     PositionJointTrajectoryActionServerConfig,
     VelocityJointTrajectoryActionServerConfig,
     PositionFFJointTrajectoryActionServerConfig,
-)
+    CartesianImpedanceJointTrajectoryActionServerConfig,
+    WrenchServerConfig,
+    StiffnessServerConfig,
+    DampingFactorsServerConfig)
+
 from joint_trajectory_action.joint_trajectory_action import (
     JointTrajectoryActionServer,
 )
@@ -51,12 +55,20 @@ from trajectory_msgs.msg import (
     JointTrajectoryPoint,
 )
 
-
 def start_server(limb, rate, mode, interpolation):
     print("Initializing node... ")
     rospy.init_node("rsdk_%s_joint_trajectory_action_server%s" %
                     (mode, "" if limb == 'both' else "_" + limb,))
     print("Initializing joint trajectory action server...")
+
+    # dyn_cfg_srvs = []
+
+    # config_objects = [
+    #     CartesianImpedanceJointTrajectoryActionServerConfig,
+    #     WrenchServerConfig,
+    #     StiffnessServerConfig,
+    #     DampingFactorsServerConfig,
+    # ]
 
     if mode == 'velocity':
         dyn_cfg_srv = Server(VelocityJointTrajectoryActionServerConfig,
@@ -64,12 +76,21 @@ def start_server(limb, rate, mode, interpolation):
     elif mode == 'position':
         dyn_cfg_srv = Server(PositionJointTrajectoryActionServerConfig,
                              lambda config, level: config)
-    elif mode == 'impedance':
-        dyn_cfg_srv = Server(ImpedanceJointTrajectoryActionServerConfig,
-                             lambda config, level: config)
+    elif mode == 'cart_impedance':
+        dyn_cfg_srv = Server(CartesianImpedanceJointTrajectoryActionServerConfig,
+                             lambda config, level: config, namespace="/CartesianImpedanceJointTrajectoryActionServer")
+        # stiffness_srv = Server(StiffnessServerConfig, stiffness_callback)
+        # damping_srv = Server(DampingFactorsServerConfig, damping_callback)
+        # wrench_srv = Server(WrenchServerConfig, wrench_callback)
+
+        # dyn_cfg_srvs.append(cart_imp_joint_traj_action_srv)
+        # for config_obj in config_objects:
+        #     dyn_cfg_srvs.append(Server(config_obj,
+        #                          lambda config, level: config))
     else:
         dyn_cfg_srv = Server(PositionFFJointTrajectoryActionServerConfig,
                              lambda config, level: config)
+
     jtas = []
     if limb == 'both':
         jtas.append(JointTrajectoryActionServer('right', dyn_cfg_srv,
@@ -102,7 +123,7 @@ def main():
     )
     parser.add_argument(
         "-m", "--mode", default='position_w_id',
-        choices=['position_w_id', 'position', 'velocity', 'impedance'],
+        choices=['position_w_id', 'position', 'velocity', 'cart_impedance'],
         help="control mode for trajectory execution"
     )
     parser.add_argument(

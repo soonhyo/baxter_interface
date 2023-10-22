@@ -244,7 +244,7 @@ class Limb(object):
         """
         return deepcopy(self._joint_effort)
 
-    def endoint_pose(self):
+    def endpoint_pose(self):
         """
         Return Cartesian endpoint pose {position, orientation}.
 

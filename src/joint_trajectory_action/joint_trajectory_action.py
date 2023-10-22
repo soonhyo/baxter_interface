@@ -59,6 +59,11 @@ import baxter_control
 import baxter_dataflow
 import baxter_interface
 
+from baxter_pykdl import baxter_kinematics
+
+from std_msgs.msg import (
+    Empty,
+)
 
 # Python2's xrange equals Python3's range, and xrange is removed on Python3
 if not hasattr(__builtins__, 'xrange'):
@@ -83,6 +88,11 @@ class JointTrajectoryActionServer(object):
         self._interpolation = interpolation
         self._cuff = baxter_interface.DigitalIO('%s_lower_cuff' % (limb,))
         self._cuff.state_changed.connect(self._cuff_cb)
+
+        # create cuff disable publisher
+        cuff_ns = 'robot/limb/' + limb + '/suppress_cuff_interaction'
+        self._pub_cuff_disable = rospy.Publisher(cuff_ns, Empty, queue_size=1)
+
         # Verify joint control mode
         self._mode = mode
         if (self._mode != 'position' and self._mode != 'position_w_id'
@@ -102,6 +112,7 @@ class JointTrajectoryActionServer(object):
         # Controller parameters from arguments, messages, and dynamic
         # reconfigure
         self._control_rate = rate  # Hz
+        self._control_rate_ = rospy.Rate(rate)
         self._control_joints = []
         self._pid_gains = {'kp': dict(), 'ki': dict(), 'kd': dict()}
         self._goal_time = 0.0
@@ -109,14 +120,38 @@ class JointTrajectoryActionServer(object):
         self._goal_error = dict()
         self._path_thresh = dict()
 
+        if self._name == "right":
+            self.init_angles = {self._name + '_s0': np.deg2rad(-20.0),
+                                self._name + '_s1': np.deg2rad(-25.0),
+                                self._name + '_e0': np.deg2rad(40.0),
+                                self._name + '_e1': np.deg2rad(60.0),
+                                self._name + '_w0': np.deg2rad(20.0),
+                                self._name + '_w1': np.deg2rad(80.0),
+                                self._name + '_w2': np.deg2rad(0.0)}
+        else:
+            self.init_angles = {self._name + '_s0': np.deg2rad(20.0),
+                                self._name + '_s1': np.deg2rad(-25.0),
+                                self._name + '_e0': np.deg2rad(-40.0),
+                                self._name + '_e1': np.deg2rad(60.0),
+                                self._name + '_w0': np.deg2rad(-20.0),
+                                self._name + '_w1': np.deg2rad(80.0),
+                                self._name + '_w2': np.deg2rad(0.0)}
+        self._safe_mode = True
+        self._safe_margin = 2
+        self.last_point = []
         # Create our PID controllers
         self._pid = dict()
         for joint in self._limb.joint_names():
             self._pid[joint] = baxter_control.PID()
-        self._cart_imp = baxter_control.CartIMP()
+
+        if self._mode == 'cart_impedance':
+            self._kin = baxter_kinematics(self._name)
+            self._cart_imp = baxter_control.CartesianImpedanceController(self._limb, self._kin, self._control_rate)
+            # self._cart_imp = baxter_control.CartIMP(name=self._name, kin=self._kin, limb=self._limb)
 
         # Create our spline coefficients
-        self._coeff = [None] * len(self._limb.joint_names())
+        self._n_joints = len(self._limb.joint_names())
+        self._coeff = [None] * self._n_joints
 
         # Set joint state publishing to specified control rate
         self._pub_rate = rospy.Publisher(
@@ -140,6 +175,27 @@ class JointTrajectoryActionServer(object):
 
     def _cuff_cb(self, value):
         self._cuff_state = value
+
+    def _go_safe_mode(self,q_d, q):
+        self.init_angles = q_d
+        if (np.abs(np.array(list(self.init_angles.values())) - np.array(list(q.values()))) > self._safe_margin).any(axis=0):
+            rospy.logwarn(".........Go safe mode..........")
+            self._limb.exit_control_mode()
+            self._move_to_ready(self.init_angles)
+            self.emergency = True
+
+    def _guarded_move_to_joint_position(self, joint_angles):
+        if joint_angles:
+            self._limb.move_to_joint_positions(joint_angles)
+        else:
+            rospy.logerr("No Joint Angles provided for move_to_joint_positions. Staying put.")
+
+    def _move_to_ready(self, joint_angles=None):
+        #print("Moving the {0} arm to start pose...".format(self._limb_name))
+        self._guarded_move_to_joint_position(joint_angles)
+        #self.gripper_open()
+        rospy.sleep(1.0)
+        rospy.loginfo("Running. Ctrl-c to quit")
 
     def _get_trajectory_parameters(self, joint_names, goal):
         # For each input trajectory, if path, goal, or goal_time tolerances
@@ -193,12 +249,9 @@ class JointTrajectoryActionServer(object):
                 self._pid[jnt].set_kd(self._dyn.config[jnt + '_kd'])
                 self._pid[jnt].initialize()
 
-            if self._mode == 'cart_impedance':
-                self.imp.set_null_damping()
-                self.imp.set_null_stiffness()
-                self.imp.set_cart_stiffness()
-                self.imp.set_cart_damping()
-                self._imp.initialize()
+        if self._mode == 'cart_impedance':
+            self._cart_imp.initialize(self._limb.joint_angles())
+
 
     def _get_current_position(self, joint_names):
         return [self._limb.joint_angle(joint) for joint in joint_names]
@@ -275,6 +328,28 @@ class JointTrajectoryActionServer(object):
                     self._limb.exit_control_mode()
                     break
                 rospy.sleep(1.0 / self._control_rate)
+        elif self._mode == 'cart_impedance':
+            q_d = joint_angles
+
+            while (not self._server.is_new_goal_available() and self._alive
+                   and self.robot_is_enabled()):
+
+                q = dict(zip(joint_names,self._get_current_position(joint_names)))
+                dq = dict(zip(joint_names, self._get_current_velocities(joint_names)))
+                self._pub_cuff_disable.publish()
+
+                self._cart_imp.update(q, dq, q_d)
+                cmd = self._cart_imp.compute_output()
+
+                if self._safe_mode:
+                    self._go_safe_mode(self.last_point, q)
+
+                self._limb.set_joint_torques(cmd)
+                if self._cuff_state:
+                    self._limb.exit_control_mode()
+                    break
+                # rospy.sleep(1.0 / self._control_rate)
+                self._control_rate_.sleep()
 
     def _command_joints(self, joint_names, point, start_time, dimensions_dict):
         if self._server.is_preempt_requested() or not self.robot_is_enabled():
@@ -283,7 +358,8 @@ class JointTrajectoryActionServer(object):
             self._command_stop(joint_names, self._limb.joint_angles(), start_time, dimensions_dict)
             return False
         velocities = []
-        efforts = []
+        torques = []
+        
         deltas = self._get_current_error(joint_names, point.positions)
         for delta in deltas:
             if ((math.fabs(delta[1]) >= self._path_thresh[delta[0]]
@@ -296,8 +372,14 @@ class JointTrajectoryActionServer(object):
                 return False
             if self._mode == 'velocity':
                 velocities.append(self._pid[delta[0]].compute_output(delta[1]))
-            if self._mode == 'cart_impedance':
-                efforts.append(self.Imp[delta[0]].compute_output(delta[1]))
+        if self._mode == 'cart_impedance':
+            q = dict(zip(joint_names,self._get_current_position(joint_names)))
+            dq = dict(zip(joint_names, self._get_current_velocities(joint_names)))
+            q_d = dict(zip(joint_names, point.positions))
+
+            self._cart_imp.update(q, dq, q_d)
+            cmd = self._cart_imp.compute_output()
+
         if ((self._mode == 'position' or self._mode == 'position_w_id')
               and self._alive):
             cmd = dict(zip(joint_names, point.positions))
@@ -310,7 +392,13 @@ class JointTrajectoryActionServer(object):
             cmd = dict(zip(joint_names, velocities))
             self._limb.set_joint_velocities(cmd)
         elif (self._mode == 'cart_impedance' and self._alive):
-            cmd = dict(zip(joint_names, torque))
+            # print("torques", torques)
+            # print("joint_names", joint_names)
+            # cmd = dict(zip(joint_names, torques))
+            # print("cmd", cmd)
+            # self.torques_ = torques
+            if self._safe_mode:
+                self._go_safe_mode(self.last_point, q)
             self._limb.set_joint_torques(cmd)
 
         return True
@@ -511,6 +599,7 @@ class JointTrajectoryActionServer(object):
         # Keep track of current indices for spline segment generation
         now_from_start = rospy.get_time() - start_time
         end_time = trajectory_points[-1].time_from_start.to_sec()
+        first = True
         while (now_from_start < end_time and not rospy.is_shutdown() and
                self.robot_is_enabled()):
             #Acquire Mutex
@@ -538,6 +627,11 @@ class JointTrajectoryActionServer(object):
                                                dimensions_dict)
 
             # Command Joint Position, Velocity, Acceleration
+
+            if first and self._safe_mode:
+                self.last_point = dict(zip(joint_names, trajectory_points[-1].positions))
+                first = False
+
             command_executed = self._command_joints(joint_names, point, start_time, dimensions_dict)
             self._update_feedback(deepcopy(point), joint_names, now_from_start)
             # Release the Mutex

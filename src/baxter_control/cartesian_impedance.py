@@ -101,6 +101,8 @@ class CartesianImpedanceController:
 
         self.tau_c = np.zeros(self.n_joints) # torque command
 
+        self.cmd_time = rospy.Time.now()
+
         # Initialize min and max values for stiffness and damping
         self.trans_stf_min = 0.0
         self.trans_stf_max = 2000.0
@@ -116,8 +118,8 @@ class CartesianImpedanceController:
         self.ns_dmp_min = 0.0
         self.ns_dmp_max = 1.0
 
-        self.tau_c_min = -2.5
-        self.tau_c_max = 2.5
+        self.tau_c_min = -3.5
+        self.tau_c_max = 3.5
 
         # self.set_stiffness([200, 200, 200, 20, 20, 20, 0], False)
         # self.set_damping_factors([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
@@ -304,10 +306,16 @@ class CartesianImpedanceController:
         self.dq = dq
         self.position, self.orientation = self.get_fk(self.q)
 
+        # jacobian_ = self.jacobian
+        # duration = rospy.Time.now() - self.cmd_time
 
         self.jacobian = self._kin.jacobian(self.q)
         self.jacobian_transpose_pinv = np.linalg.pinv(self.jacobian.T)
-        # self.djacobian = (jacobian_ - self.jacobian) / (1.0 / duration)
+        # self.djacobian = (self.jacobian - jacobian_) / 0.01
+        # print(self.djacobian)
+        # print(self.djacobian)
+        # self.cart_inertia = self._kin.cart_inertia(self.q)
+
         #target
         self.q_d_nullspace = q_d
         # self.set_q_d_nullspace_target(self.q_d)
@@ -350,6 +358,10 @@ class CartesianImpedanceController:
         tau_nullspace = np.zeros(self.n_joints)
         # tau_ext = np.zeros(self.n_joints)
         # Calculate task torque
+        # extra = self.cart_inertia.dot(self.djacobian.dot(dq.T).T)
+        # print(extra)
+        # tau_task = self.jacobian.T.dot(-self.cartesian_stiffness.dot(error.T) - self.cartesian_damping.dot(self.jacobian.dot(dq.T).T)
+        #                                -extra).T
         tau_task = self.jacobian.T.dot(-self.cartesian_stiffness.dot(error.T) - self.cartesian_damping.dot(self.jacobian.dot(dq.T).T)).T
 
         # Calculate nullspace torque
@@ -367,10 +379,10 @@ class CartesianImpedanceController:
 
         for idx, joint in enumerate(self.joint_names):
             # spring portion
-            cmd[joint] = np.clip(tau_c[idx], self.tau_c_min, self.tau_c_max)
-            # cmd[joint] = tau_d[idx]
+            # cmd[joint] = np.clip(tau_c[idx], self.tau_c_min, self.tau_c_max)
+            cmd[joint] = tau_c[idx]
         #rospy.loginfo(cmd)
-
+        self.cmd_time = rospy.Time.now()
         return cmd
 
     def get_fk(self, q):
