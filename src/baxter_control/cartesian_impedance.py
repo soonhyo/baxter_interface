@@ -118,8 +118,8 @@ class CartesianImpedanceController:
         self.ns_dmp_min = 0.0
         self.ns_dmp_max = 1.0
 
-        self.tau_c_min = -3.5
-        self.tau_c_max = 3.5
+        self.tau_c_min = -10.0
+        self.tau_c_max = 10.0
 
         # self.set_stiffness([200, 200, 200, 20, 20, 20, 0], False)
         # self.set_damping_factors([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
@@ -493,8 +493,8 @@ class CartesianImpedanceController:
                           "Cartesian tau_d: "+ self.tau_c)  # Your detailed log message here
 
         if self.verbose_tf:
-            self.publish_tf(self.position, self.orientation, self.root_frame, f"{self.end_effector_}_ee_fk")
-            self.publish_tf(self.position_d, self.orientation_d, self.root_frame, f"{self.end_effector}_ee_ref_pose")
+            self.publish_tf(self.position, self.orientation, self.root_frame, self.end_effector+"_ee_fk")
+            self.publish_tf(self.position_d, self.orientation_d, self.root_frame, self.end_effector+"_ee_ref_pose")
 
     def publish_tf(self, position, orientation, from_frame, to_frame):
         transform = TransformStamped()
