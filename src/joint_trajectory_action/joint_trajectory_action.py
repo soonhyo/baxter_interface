@@ -137,7 +137,7 @@ class JointTrajectoryActionServer(object):
                                 self._name + '_w0': np.deg2rad(-20.0),
                                 self._name + '_w1': np.deg2rad(80.0),
                                 self._name + '_w2': np.deg2rad(0.0)}
-        self._safe_mode = True
+        self._safe_mode = False
         self._safe_margin = 2
         self.last_point = []
 
@@ -379,7 +379,8 @@ class JointTrajectoryActionServer(object):
                     break
                 rospy.sleep(1.0 / self._control_rate)
         elif self._mode == 'cart_impedance':
-            q_d = joint_angles
+            # q_d = joint_angles
+            q_d = self.last_point
 
             while (not self._server.is_new_goal_available() and self._alive
                    and self.robot_is_enabled()):
@@ -678,9 +679,9 @@ class JointTrajectoryActionServer(object):
                                                dimensions_dict)
 
             # Command Joint Position, Velocity, Acceleration
+            self.last_point = dict(zip(joint_names, trajectory_points[-1].positions))
 
             if first and self._safe_mode:
-                self.last_point = dict(zip(joint_names, trajectory_points[-1].positions))
                 first = False
 
             if self._stiff:
