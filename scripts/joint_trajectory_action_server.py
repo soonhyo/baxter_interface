@@ -55,20 +55,11 @@ from trajectory_msgs.msg import (
     JointTrajectoryPoint,
 )
 
-def start_server(limb, rate, mode, interpolation):
+def start_server(limb, rate, mode, interpolation, stiff):
     print("Initializing node... ")
     rospy.init_node("rsdk_%s_joint_trajectory_action_server%s" %
                     (mode, "" if limb == 'both' else "_" + limb,))
     print("Initializing joint trajectory action server...")
-
-    # dyn_cfg_srvs = []
-
-    # config_objects = [
-    #     CartesianImpedanceJointTrajectoryActionServerConfig,
-    #     WrenchServerConfig,
-    #     StiffnessServerConfig,
-    #     DampingFactorsServerConfig,
-    # ]
 
     if mode == 'velocity':
         dyn_cfg_srv = Server(VelocityJointTrajectoryActionServerConfig,
@@ -79,14 +70,6 @@ def start_server(limb, rate, mode, interpolation):
     elif mode == 'cart_impedance':
         dyn_cfg_srv = Server(CartesianImpedanceJointTrajectoryActionServerConfig,
                              lambda config, level: config, namespace="/CartesianImpedanceJointTrajectoryActionServer")
-        # stiffness_srv = Server(StiffnessServerConfig, stiffness_callback)
-        # damping_srv = Server(DampingFactorsServerConfig, damping_callback)
-        # wrench_srv = Server(WrenchServerConfig, wrench_callback)
-
-        # dyn_cfg_srvs.append(cart_imp_joint_traj_action_srv)
-        # for config_obj in config_objects:
-        #     dyn_cfg_srvs.append(Server(config_obj,
-        #                          lambda config, level: config))
     else:
         dyn_cfg_srv = Server(PositionFFJointTrajectoryActionServerConfig,
                              lambda config, level: config)
@@ -94,11 +77,13 @@ def start_server(limb, rate, mode, interpolation):
     jtas = []
     if limb == 'both':
         jtas.append(JointTrajectoryActionServer('right', dyn_cfg_srv,
-                                                rate, mode, interpolation))
+                                                rate, mode, interpolation, stiff))
         jtas.append(JointTrajectoryActionServer('left', dyn_cfg_srv,
-                                                rate, mode, interpolation))
+                                                rate, mode, interpolation, stiff))
     else:
-        jtas.append(JointTrajectoryActionServer(limb, dyn_cfg_srv, rate, mode, interpolation))
+        jtas.append(JointTrajectoryActionServer(limb, dyn_cfg_srv, rate, mode, interpolation, stiff))
+
+    print("stiffness mode: ", stiff)
 
     def cleanup():
         for j in jtas:
@@ -127,12 +112,16 @@ def main():
         help="control mode for trajectory execution"
     )
     parser.add_argument(
+        "-s", "--stiff", action="store_true",
+        help="stiffness control mode"
+    )
+    parser.add_argument(
         "-i", "--interpolation", default='bezier',
         choices=['bezier', 'bezier_with_velocity', 'minjerk'],
         help="interpolation method for trajectory generation"
     )
     args = parser.parse_args(rospy.myargv()[1:])
-    start_server(args.limb, args.rate, args.mode, args.interpolation)
+    start_server(args.limb, args.rate, args.mode, args.interpolation, args.stiff)
 
 
 if __name__ == "__main__":
