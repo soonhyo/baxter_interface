@@ -118,8 +118,8 @@ class CartesianImpedanceController:
         self.ns_dmp_min = 0.0
         self.ns_dmp_max = 1.0
 
-        self.tau_c_min = -10.0
-        self.tau_c_max = 10.0
+        self.tau_c_min = -1.0
+        self.tau_c_max = 1.0
 
         # self.set_stiffness([200, 200, 200, 20, 20, 20, 0], False)
         # self.set_damping_factors([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
@@ -173,9 +173,9 @@ class CartesianImpedanceController:
         F = np.zeros(6)
         if config['wrench']:
             F = np.array([config['f_x'], config['f_y'], config['f_z'], config['tau_x'], config['tau_y'], config['tau_z']])
-            if not self.transform_wrench(F, self.end_effector, self.root_frame):
-                rospy.logerr("Could not transform wrench. Not applying it.")
-                return
+            # if not self.transform_wrench(F, self.end_effector, self.root_frame):
+            #     rospy.logerr("Could not transform wrench. Not applying it.")
+            #     return
 
             self.apply_wrench(F)
 
@@ -239,8 +239,8 @@ class CartesianImpedanceController:
 
             v_f = cartesian_wrench[:3]
             v_t = cartesian_wrench[3:]
-            print(v_f)
-            print(v_t)
+            # print(v_f)
+            # print(v_t)
             # Rotating the vectors
             quat_vec_f = np.array([0] + list(v_f))
             quat_vec_t = np.array([0] + list(v_t))
@@ -248,8 +248,8 @@ class CartesianImpedanceController:
 
             v_f_rot = quaternion_multiply(quaternion_multiply(quat_rot, quat_vec_f), np.conj(quat_rot))[1:]
             v_t_rot = quaternion_multiply(quaternion_multiply(quat_rot, quat_vec_t), np.conj(quat_rot))[1:]
-            print("v_f_rot", v_f_rot)
-            print("v_t_rot", v_t_rot)
+            # print("v_f_rot", v_f_rot)
+            # print("v_t_rot", v_t_rot)
 
             cartesian_wrench[:] = np.concatenate([v_f_rot, v_t_rot])
 
@@ -325,9 +325,9 @@ class CartesianImpedanceController:
         self.position_d, self.orientation_d =  self.get_fk(self.q_d_nullspace)
         # self.position_d_target, self.orientation_d_target =  self.get_fk(self.q_d)
 
-        # self.set_reference_pose(self.position_d_target, self.orientation_d_target)
+        self.set_reference_pose(self.position_d_target, self.orientation_d_target)
 
-        # self.update_filtered_stiffness()
+        self.update_filtered_stiffness()
         # self.update_filtered_pose()
         # self.update_filtered_wrench()
 
@@ -335,7 +335,6 @@ class CartesianImpedanceController:
 
     def compute_output(self):
         # Perform a filtering step
-
 
         # current state
         cmd = dict()
@@ -382,7 +381,6 @@ class CartesianImpedanceController:
             # cmd[joint] = np.clip(tau_c[idx], self.tau_c_min, self.tau_c_max)
             cmd[joint] = tau_c[idx]
         #rospy.loginfo(cmd)
-        self.cmd_time = rospy.Time.now()
         return cmd
 
     def get_fk(self, q):

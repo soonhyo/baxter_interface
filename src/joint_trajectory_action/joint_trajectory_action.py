@@ -158,7 +158,7 @@ class JointTrajectoryActionServer(object):
             '/robot/joint_state_publish_rate',
              UInt16,
              queue_size=10)
-        self._pub_rate.publish(self._control_rate)
+        self._pub_rate.publish(int(self._control_rate))
 
         self._pub_ff_cmd = rospy.Publisher(
             self._ns + '/inverse_dynamics_command',
