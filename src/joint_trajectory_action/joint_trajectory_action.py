@@ -172,7 +172,7 @@ class JointTrajectoryActionServer(object):
 
         if self._stiff:
             self._kin = baxter_kinematics(self._name)
-            self._imp = baxter_control.IMP(self._kin)
+            self._imp = baxter_control.IMP(self._kin, self._dyn)
             self._sub_stiff = rospy.Subscriber("/comb/filtered_wrench", WrenchStamped, self._stiff_cb)
 
         # Create our spline coefficients

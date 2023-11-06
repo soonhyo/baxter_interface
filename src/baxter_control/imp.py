@@ -6,13 +6,15 @@ import dynamic_reconfigure.client
 
 class IMP(object):
     # New attributes for stiffness control
-    def __init__(self, kin=None):
+    def __init__(self, kin=None, dyn=None):
+        self._kin = kin
+        self._dyn = dyn
+
         self._cartesian_D = np.zeros(6)
         self._cartesian_K = np.zeros(6)
         self._cartesian_D_target = np.zeros(6)
         self._cartesian_K_target = np.zeros(6)
 
-        self._kin = kin
         self._stiff_force = np.zeros(6)
 
         self._cur_time = rospy.get_time()
@@ -32,7 +34,9 @@ class IMP(object):
 
         self.filter_params = rospy.set_param("~filtering/param", 1.0)
 
-        self.dyn_srv_wrench_param = dynamic_reconfigure.client.Client("position_imp", timeout=30, config_callback=self.dynamic_cb)
+        self.dyn_srv_wrench_param = dynamic_reconfigure.client.Client("position_imp", timeout=30, config_callback=self.dynamic_update)
+
+        self.dynamic_update(self._dyn.config)
 
     def saturate_value(self, x, x_min, x_max):
         return np.clip(x, x_min, x_max)
@@ -62,13 +66,13 @@ class IMP(object):
             self._cartesian_K = np.copy(self._cartesian_K_target)
             self._cartesian_D = np.copy(self._cartesian_D_target)
         else:
-            print("params: ",self.filter_params)
+            # print("params: ",self.filter_params)
             step = self.filter_step(self.update_frequency, self.filter_params)
-            print("step: ", step)
+            # print("step: ", step)
             self._cartesian_K = self.filtered_update(self._cartesian_K_target, self._cartesian_K, step)
             self._cartesian_D = self.filtered_update(self._cartesian_D_target, self._cartesian_D, step)
 
-    def dynamic_cb(self, config):
+    def dynamic_update(self, config):
         if config['stiffness']:
             tx = self.saturate_value(config['translation_x_s'], self.trans_stf_min, self.trans_stf_max)
             ty = self.saturate_value(config['translation_y_s'], self.trans_stf_min, self.trans_stf_max)
@@ -90,13 +94,13 @@ class IMP(object):
         # Method for stiffness calculation
     def _stiff_cal(self, force, joint_vel):
         endpoint_vel = np.asarray(self._kin.jacobian().dot(np.asarray(list(joint_vel.values())).reshape(7,-1))).ravel()
-        print("K", self._cartesian_K)
-        print("D", self._cartesian_D)
+        # print("K", self._cartesian_K)
+        # print("D", self._cartesian_D)
 
         # print("endpoint_vel", endpoint_vel)
         # print("force", force)
         diff_pose = -1.0* (force + self._cartesian_D * endpoint_vel) * self._cartesian_K
-        print("diff pose", diff_pose)
+        # print("diff pose", diff_pose)
         return diff_pose
 
     # Method for applying stiffness
