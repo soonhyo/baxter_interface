@@ -6,7 +6,7 @@ import dynamic_reconfigure.client
 
 class IMP(object):
     # New attributes for stiffness control
-    def __init__(self, kin=None, dyn=None):
+    def __init__(self, kin=None, dyn=None, pointp=None):
         self._kin = kin
         self._dyn = dyn
 
@@ -15,7 +15,11 @@ class IMP(object):
         self._cartesian_D_target = np.zeros(6)
         self._cartesian_K_target = np.zeros(6)
 
-        self._stiff_force = np.zeros(6)
+        self._force = np.zeros(6)
+        self._force_target = np.zeros(6)
+
+        self._pointp = pointp
+        self._pointp_target = pointp
 
         self._cur_time = rospy.get_time()
         self._prev_time = self._cur_time
@@ -32,7 +36,9 @@ class IMP(object):
 
         self.update_frequency = 100
 
-        self.filter_params = rospy.set_param("~filtering/param", 1.0)
+        # self.filter_gains = rospy.set_param("~filtering/gains", 1.0)
+        # self.filter_wrench = rospy.set_param("~filtering/wrench", 1.0)
+        # self.filter_pointp = rospy.set_param("~filtering/pointp", 1.0)
 
         self.dyn_srv_wrench_param = dynamic_reconfigure.client.Client("position_imp", timeout=30, config_callback=self.dynamic_update)
 
@@ -62,15 +68,29 @@ class IMP(object):
         return result
 
     def update_filtered_gains(self):
-        if self.filter_params == 1.0:
+        if self.filter_gains == 1.0:
             self._cartesian_K = np.copy(self._cartesian_K_target)
             self._cartesian_D = np.copy(self._cartesian_D_target)
         else:
             # print("params: ",self.filter_params)
-            step = self.filter_step(self.update_frequency, self.filter_params)
+            step = self.filter_step(self.update_frequency, self.filter_gains)
             # print("step: ", step)
             self._cartesian_K = self.filtered_update(self._cartesian_K_target, self._cartesian_K, step)
             self._cartesian_D = self.filtered_update(self._cartesian_D_target, self._cartesian_D, step)
+
+    def update_filtered_force(self):
+        if self.filter_force == 1.0:
+            self._force = np.copy(self._force_target)
+        else:
+            step = self.filter_step(self.update_frequency, self.filter_force)
+            self._force = self.filtered_update(self._force_target, self._force, step)
+
+    def update_filtered_pointp(self):
+        if self.filter_pointp == 1.0:
+            self._pointp = np.copy(self._pointp_target)
+        else:
+            step = self.filter_step(self.update_frequency, self.filter_pointp)
+            self._pointp = self.filtered_update(self._pointp_target, self._pointp, step)
 
     def dynamic_update(self, config):
         if config['stiffness']:
@@ -89,7 +109,10 @@ class IMP(object):
             ry_d = self.saturate_value(config['rotation_y_d'], self.rot_dmp_min, self.rot_dmp_max)
             rz_d = self.saturate_value(config['rotation_z_d'], self.rot_dmp_min, self.rot_dmp_max)
             self.set_D([tx_d, ty_d, tz_d, rx_d, ry_d, rz_d])
-        self.filter_params = config['filtering_weight']
+
+        self.filter_gains = config['filter_gains']
+        self.filter_force = config['filter_force']
+        self.filter_pointp = config['filter_pointp']
 
         # Method for stiffness calculation
     def _stiff_cal(self, force, joint_vel):
@@ -105,17 +128,21 @@ class IMP(object):
 
     # Method for applying stiffness
     def compute_output(self, joint_names, pointp, joint_vel, force):
+        self._force_target = force
+        self._pointp = pointp
         self.update_filtered_gains()
+        self.update_filtered_force()
 
-        self._stiff_pose = self._stiff_cal(force, joint_vel)
+        self._stiff_pose = self._stiff_cal(self._force, joint_vel)
         jacobian_pseudo_inv = np.linalg.pinv(self._kin.jacobian())
 
         self._cur_time = rospy.get_time()
 
         dt = self._cur_time - self._prev_time
 
-        _pointp =np.asarray(pointp + jacobian_pseudo_inv.dot(self._stiff_pose) * dt).ravel()
+        self._pointp_target = np.asarray(self._pointp + jacobian_pseudo_inv.dot(self._stiff_pose) * dt).ravel()
+        self.update_filtered_pointp()
 
         self._prev_time = self._cur_time
 
-        return _pointp
+        return self._pointp
