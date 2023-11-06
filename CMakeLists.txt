@@ -23,9 +23,7 @@ generate_dynamic_reconfigure_options(
   cfg/CartesianImpedanceJointTrajectoryActionServer.cfg
   cfg/GripperActionServer.cfg
   cfg/HeadActionServer.cfg
-  cfg/StiffnessServer.cfg
-  cfg/DampingFactorsServer.cfg
-  cfg/WrenchServer.cfg
+  cfg/CartesianImpedanceGain.cfg
 )
 
 add_dependencies(${PROJECT_NAME}_gencfg baxter_core_msgs_generate_messages_py)

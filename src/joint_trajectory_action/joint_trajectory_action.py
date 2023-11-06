@@ -41,6 +41,8 @@ from . import minjerk
 
 import rospy
 
+import tf.transformations
+
 import actionlib
 
 from control_msgs.msg import (
@@ -137,15 +139,26 @@ class JointTrajectoryActionServer(object):
                                 self._name + '_w0': np.deg2rad(-20.0),
                                 self._name + '_w1': np.deg2rad(80.0),
                                 self._name + '_w2': np.deg2rad(0.0)}
+
         self._safe_mode = False
         self._safe_margin = 2
         self.last_point = []
 
         self._stiff = stiff
-        self._stiff_pos = [0.0]*3
-        self._stiff_force = [0.0]*3
+        self._stiff_pose = np.zeros(6)
+        self._stiff_force = np.zeros(6)
         self._K = 5000.0
         self._D = 0.001
+
+        self._cartesian_K = np.zeros(6)
+        self._cartesian_K[1] = 0.01
+
+        self._cartesian_D = self._damping_rule(self._cartesian_K)
+        self._cartesian_D = np.zeros(6)
+        self._cartesian_D[1] = 0.01
+
+        self._cur_time = rospy.get_time()
+        self._prev_time = self._cur_time
 
         # Create our PID controllers
         self._pid = dict()
@@ -159,6 +172,7 @@ class JointTrajectoryActionServer(object):
 
         if self._stiff:
             self._kin = baxter_kinematics(self._name)
+            self._imp = baxter_control.IMP(self._kin)
             self._sub_stiff = rospy.Subscriber("/comb/filtered_wrench", WrenchStamped, self._stiff_cb)
 
         # Create our spline coefficients
@@ -188,38 +202,17 @@ class JointTrajectoryActionServer(object):
     def _cuff_cb(self, value):
         self._cuff_state = value
 
+    def _damping_rule(self, K):
+        return 2 * np.sqrt(K)
+
     def _stiff_cb(self, msg):
         self._stiff_frame = msg.header.frame_id
         self._stiff_force = np.asarray([msg.wrench.force.x,
-                                        msg.wrench.force.z,
                                         msg.wrench.force.y,
-                                        0.0,
-                                        0.0,
-                                        0.0], dtype=np.float64)
-
-    def _stiff_cal_(self, F):
-        return -1.0 * (F / self._K)
-
-    def _stiff_cal(self, joint_names, force, joint_vel):
-        endpoint_vel = self._kin.jacobian().dot(np.asarray(list(joint_vel.values())).reshape(7,-1)).T
-        # endpoint_vel = np.asarray([self._limb.endpoint_velocity()['linear'].x,
-        #                            self._limb.endpoint_velocity()['linear'].y,
-        #                            self._limb.endpoint_velocity()['linear'].z,
-        #                            self._limb.endpoint_velocity()['angular'].x,
-        #                            self._limb.endpoint_velocity()['angular'].y,
-        #                            self._limb.endpoint_velocity()['angular'].z], dtype=np.float64)
-        return -1.0 * (force + self._D * endpoint_vel) / self._K
-
-
-    def _apply_stiff(self, joint_names, pointp):
-        joint_vel = self._limb.joint_velocities()
-        self._stiff_pos = self._stiff_cal(joint_names, self._stiff_force, joint_vel)
-
-        endpoint_pose = self._kin.forward_position_kinematics(dict(zip(joint_names, pointp)))
-        endpoint_pose[:3] = endpoint_pose[:3] + self._stiff_pos[0,:3]
-
-        _pointp = self._kin.inverse_kinematics(endpoint_pose[:3], endpoint_pose[3:], seed=pointp)
-        return _pointp
+                                        msg.wrench.force.z,
+                                        msg.wrench.torque.x,
+                                        msg.wrench.torque.y,
+                                        msg.wrench.torque.z], dtype=np.float32)
 
     def _go_safe_mode(self,q_d, q):
         self.init_angles = q_d
@@ -364,7 +357,8 @@ class JointTrajectoryActionServer(object):
             while (not self._server.is_new_goal_available() and self._alive
                    and self.robot_is_enabled()):
                 if self._stiff:
-                    applied_joint_angles = self._apply_stiff(joint_names, joint_angles.values())
+                    applied_joint_angles = self._imp.compute_output(joint_names, list(joint_angles.values()), self._limb.joint_velocities(), self._stiff_force)
+                    self._stiff_force = np.zeros(6)
                     self._limb.set_joint_positions(dict(zip(joint_names, applied_joint_angles)), raw=raw_pos_mode)
                 else:
                     self._limb.set_joint_positions(joint_angles, raw=raw_pos_mode)
@@ -685,7 +679,8 @@ class JointTrajectoryActionServer(object):
                 first = False
 
             if self._stiff:
-                point.positions = self._apply_stiff(joint_names, point.positions)
+                point.positions = self._imp.compute_output(joint_names, point.positions, self._limb.joint_velocities(), self._stiff_force)
+                self._stiff_force = np.zeros(6)
 
             command_executed = self._command_joints(joint_names, point, start_time, dimensions_dict)
             self._update_feedback(deepcopy(point), joint_names, now_from_start)
@@ -695,7 +690,8 @@ class JointTrajectoryActionServer(object):
             control_rate.sleep()
         # Keep trying to meet goal until goal_time constraint expired
         if self._stiff:
-            trajectory_points[-1].positions = self._apply_stiff(joint_names, trajectory_points[-1].positions)
+            trajectory_points[-1].positions = self._imp.compute_output(joint_names, trajectory_points[-1].positions, self._limb.joint_velocities(), self._stiff_force)
+            self._stiff_force = np.zeros(6)
 
         last = trajectory_points[-1]
         last_time = trajectory_points[-1].time_from_start.to_sec()

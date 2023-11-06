@@ -55,7 +55,7 @@ from trajectory_msgs.msg import (
     JointTrajectoryPoint,
 )
 
-def start_server(limb, rate, mode, interpolation, stiff):
+def start_server(limb, rate, mode, interpolation, imp):
     print("Initializing node... ")
     rospy.init_node("rsdk_%s_joint_trajectory_action_server%s" %
                     (mode, "" if limb == 'both' else "_" + limb,))
@@ -72,18 +72,18 @@ def start_server(limb, rate, mode, interpolation, stiff):
                              lambda config, level: config, namespace="/CartesianImpedanceJointTrajectoryActionServer")
     else:
         dyn_cfg_srv = Server(PositionFFJointTrajectoryActionServerConfig,
-                             lambda config, level: config)
+                             lambda config, level: config, namespace="/position_imp")
 
     jtas = []
     if limb == 'both':
         jtas.append(JointTrajectoryActionServer('right', dyn_cfg_srv,
-                                                rate, mode, interpolation, stiff))
+                                                rate, mode, interpolation, imp))
         jtas.append(JointTrajectoryActionServer('left', dyn_cfg_srv,
-                                                rate, mode, interpolation, stiff))
+                                                rate, mode, interpolation, imp))
     else:
-        jtas.append(JointTrajectoryActionServer(limb, dyn_cfg_srv, rate, mode, interpolation, stiff))
+        jtas.append(JointTrajectoryActionServer(limb, dyn_cfg_srv, rate, mode, interpolation, imp))
 
-    print("stiffness mode: ", stiff)
+    print("impedance mode: ", imp)
 
     def cleanup():
         for j in jtas:
