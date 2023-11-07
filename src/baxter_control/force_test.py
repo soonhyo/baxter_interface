@@ -26,12 +26,14 @@ def wrench_publisher():
     # 시작 시간
     start_time = rospy.get_time()
 
+    ramda = 0.5
+
     while not rospy.is_shutdown():
         # 현재 시간
         current_time = rospy.get_time()
 
         # y 방향 힘을 사인 함수로 변화
-        wrench_stamped.wrench.force.y = gain * math.sin(2 * math.pi * (current_time - start_time))
+        wrench_stamped.wrench.force.y = gain * math.sin(ramda * math.pi * (current_time - start_time))
 
         # 현재 시각으로 header.stamp 업데이트
         wrench_stamped.header.stamp = rospy.Time.now()

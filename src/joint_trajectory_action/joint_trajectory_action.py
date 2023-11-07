@@ -144,9 +144,9 @@ class JointTrajectoryActionServer(object):
         self._safe_margin = 2
         self.last_point = []
 
-        self._stiff = stiff
-        self._stiff_pose = np.zeros(6)
-        self._stiff_force = np.zeros(6)
+        self._pimp = stiff
+        self._pimp_pose = np.zeros(6)
+        self._pimp_force = np.zeros(6)
         self._K = 5000.0
         self._D = 0.001
 
@@ -170,10 +170,10 @@ class JointTrajectoryActionServer(object):
             self._cart_imp = baxter_control.CartesianImpedanceController(self._limb, self._kin, self._control_rate)
             # self._cart_imp = baxter_control.CartIMP(name=self._name, kin=self._kin, limb=self._limb)
 
-        if self._stiff:
+        if self._pimp:
             self._kin = baxter_kinematics(self._name)
-            self._imp = baxter_control.IMP(self._kin, self._dyn, self._get_current_position(self._limb.joint_names()))
-            self._sub_stiff = rospy.Subscriber("/comb/filtered_wrench", WrenchStamped, self._stiff_cb)
+            self._pimp = baxter_control.IMP(self._kin, self._dyn, self._get_current_position(self._limb.joint_names()))
+            self._sub_pimp = rospy.Subscriber("/comb/filtered_wrench", WrenchStamped, self._pimp_cb)
 
         # Create our spline coefficients
         self._n_joints = len(self._limb.joint_names())
@@ -205,9 +205,9 @@ class JointTrajectoryActionServer(object):
     def _damping_rule(self, K):
         return 2 * np.sqrt(K)
 
-    def _stiff_cb(self, msg):
-        self._stiff_frame = msg.header.frame_id
-        self._stiff_force = np.asarray([msg.wrench.force.x,
+    def _pimp_cb(self, msg):
+        self._pimp_frame = msg.header.frame_id
+        self._pimp_force = np.asarray([msg.wrench.force.x,
                                         msg.wrench.force.y,
                                         msg.wrench.force.z,
                                         msg.wrench.torque.x,
@@ -356,9 +356,9 @@ class JointTrajectoryActionServer(object):
                     pnt.accelerations = [0.0] * len(joint_names)
             while (not self._server.is_new_goal_available() and self._alive
                    and self.robot_is_enabled()):
-                if self._stiff:
-                    applied_joint_angles = self._imp.compute_output(joint_names, list(joint_angles.values()), self._limb.joint_velocities(), self._stiff_force)
-                    self._stiff_force = np.zeros(6)
+                if self._pimp:
+                    applied_joint_angles = self._pimp.compute_output(joint_names, list(joint_angles.values()), self._limb.joint_velocities(), self._pimp_force)
+                    self._pimp_force = np.zeros(6)
                     self._limb.set_joint_positions(dict(zip(joint_names, applied_joint_angles)), raw=raw_pos_mode)
                 else:
                     self._limb.set_joint_positions(joint_angles, raw=raw_pos_mode)
@@ -678,9 +678,9 @@ class JointTrajectoryActionServer(object):
             if first and self._safe_mode:
                 first = False
 
-            if self._stiff:
-                point.positions = self._imp.compute_output(joint_names, point.positions, self._limb.joint_velocities(), self._stiff_force)
-                self._stiff_force = np.zeros(6)
+            if self._pimp:
+                point.positions = self._pimp.compute_output(joint_names, point.positions, self._limb.joint_velocities(), self._pimp_force)
+                self._pimp_force = np.zeros(6)
 
             command_executed = self._command_joints(joint_names, point, start_time, dimensions_dict)
             self._update_feedback(deepcopy(point), joint_names, now_from_start)
@@ -689,9 +689,9 @@ class JointTrajectoryActionServer(object):
                 return
             control_rate.sleep()
         # Keep trying to meet goal until goal_time constraint expired
-        if self._stiff:
-            trajectory_points[-1].positions = self._imp.compute_output(joint_names, trajectory_points[-1].positions, self._limb.joint_velocities(), self._stiff_force)
-            self._stiff_force = np.zeros(6)
+        if self._pimp:
+            trajectory_points[-1].positions = self._pimp.compute_output(joint_names, trajectory_points[-1].positions, self._limb.joint_velocities(), self._pimp_force)
+            self._pimp_force = np.zeros(6)
 
         last = trajectory_points[-1]
         last_time = trajectory_points[-1].time_from_start.to_sec()

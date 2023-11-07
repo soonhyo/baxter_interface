@@ -55,11 +55,13 @@ from trajectory_msgs.msg import (
     JointTrajectoryPoint,
 )
 
-def start_server(limb, rate, mode, interpolation, imp):
+def start_server(limb, rate, mode, interpolation, pimp):
     print("Initializing node... ")
     rospy.init_node("rsdk_%s_joint_trajectory_action_server%s" %
                     (mode, "" if limb == 'both' else "_" + limb,))
     print("Initializing joint trajectory action server...")
+
+    pimp = True if pimp == "true" else False
 
     if mode == 'velocity':
         dyn_cfg_srv = Server(VelocityJointTrajectoryActionServerConfig,
@@ -77,13 +79,13 @@ def start_server(limb, rate, mode, interpolation, imp):
     jtas = []
     if limb == 'both':
         jtas.append(JointTrajectoryActionServer('right', dyn_cfg_srv,
-                                                rate, mode, interpolation, imp))
+                                                rate, mode, interpolation, pimp))
         jtas.append(JointTrajectoryActionServer('left', dyn_cfg_srv,
-                                                rate, mode, interpolation, imp))
+                                                rate, mode, interpolation, pimp))
     else:
-        jtas.append(JointTrajectoryActionServer(limb, dyn_cfg_srv, rate, mode, interpolation, imp))
+        jtas.append(JointTrajectoryActionServer(limb, dyn_cfg_srv, rate, mode, interpolation, pimp))
 
-    print("impedance mode: ", imp)
+    print("impedance mode: ", pimp)
 
     def cleanup():
         for j in jtas:
@@ -112,8 +114,9 @@ def main():
         help="control mode for trajectory execution"
     )
     parser.add_argument(
-        "-s", "--stiff", action="store_true",
-        help="stiffness control mode"
+        "-p", "--pimp", default='true',
+        choices=['true','false'],
+        help="position based impedance control mode"
     )
     parser.add_argument(
         "-i", "--interpolation", default='bezier',
@@ -121,7 +124,7 @@ def main():
         help="interpolation method for trajectory generation"
     )
     args = parser.parse_args(rospy.myargv()[1:])
-    start_server(args.limb, args.rate, args.mode, args.interpolation, args.stiff)
+    start_server(args.limb, args.rate, args.mode, args.interpolation, args.pimp)
 
 
 if __name__ == "__main__":
