@@ -114,8 +114,15 @@ class IMP(object):
         self.filter_pointp = config['filter_pointp']
 
         # Method for stiffness calculation
-    def _stiff_cal(self, force, joint_vel):
-        endpoint_vel = np.asarray(self._kin.jacobian().dot(np.asarray(list(joint_vel.values())).reshape(7,-1))).ravel()
+
+    def _reorder_joint_values(self, joint_order, joint_dict):
+        reordered_joint_angles = []
+        for jnt_name in joint_order:
+           reordered_joint_angles.append(joint_dict[jnt_name])
+        return reordered_joint_angles
+    
+    def _stiff_cal(self, joint_names, force, joint_vel):
+        endpoint_vel = np.asarray(self._kin.jacobian().dot(np.asarray(self._reorder_joint_values(joint_names ,joint_vel)).reshape(7,-1))).ravel()
         # print("K", self._cartesian_K)
         # print("D", self._cartesian_D)
 
@@ -135,7 +142,7 @@ class IMP(object):
         self.update_filtered_gains()
         self.update_filtered_force()
 
-        self._stiff_pose = self._stiff_cal(self._force, joint_vel)
+        self._stiff_pose = self._stiff_cal(joint_names, self._force, joint_vel)
         jacobian_pseudo_inv = np.linalg.pinv(self._kin.jacobian())
 
         self._cur_time = rospy.get_time()

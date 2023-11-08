@@ -135,6 +135,12 @@ class CartesianImpedanceController:
 
         rospy.loginfo("Finished initialization.")
 
+    def _reorder_joint_values(self, joint_order, joint_dict):
+        reordered_joint_angles = []
+        for jnt_name in joint_order:
+           reordered_joint_angles.append(joint_dict[jnt_name])
+        return reordered_joint_angles
+
     # init current q and pose
     def init_desired_pose(self, position_d_target, orientation_d_target):
         self.set_reference_pose(position_d_target, orientation_d_target)
@@ -340,11 +346,9 @@ class CartesianImpedanceController:
         # current state
         cmd = dict()
 
-        joint_name = self.q_d_nullspace.keys()
-        q_d = np.asarray(list(self.q_d_nullspace.values()))
-        q = np.asarray(list(self.q.values()))
-        dq = np.asarray(list(self.dq.values()))
-
+        q_d = np.asarray(self._reordered_joint_values(self.joint_names,  self.q_d_nullspace))
+        q = np.asarray(self._reordered_joint_values(self.joint_names, self.q))
+        dq = np.asarray(self._reordered_joitn_values(self.joint_names, self.dq))
 
         # Compute error term
         error = np.zeros(6)

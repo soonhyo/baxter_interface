@@ -216,7 +216,7 @@ class JointTrajectoryActionServer(object):
 
     def _go_safe_mode(self,q_d, q):
         self.init_angles = q_d
-        if (np.abs(np.array(list(self.init_angles.values())) - np.array(list(q.values()))) > self._safe_margin).any(axis=0):
+        if (np.abs(np.array(self._reordered_joint_values(init_angles))) - np.array(self._reordered_joint_values(q))) > self._safe_margin).any(axis=0):
             rospy.logwarn(".........Go safe mode..........")
             self._limb.exit_control_mode()
             self._move_to_ready(self.init_angles)
@@ -317,6 +317,12 @@ class JointTrajectoryActionServer(object):
         self._fdbk.error.time_from_start = rospy.Duration.from_sec(cur_time)
         self._server.publish_feedback(self._fdbk)
 
+    def _reorder_joint_values(self, joint_order, joint_dict):
+        reordered_joint_angles = []
+        for jnt_name in joint_order:
+           reordered_joint_angles.append(joint_dict[jnt_name])
+        return reordered_joint_angles
+
     def _reorder_joints_ff_cmd(self, joint_names, point):
         joint_name_order = self._limb.joint_names()
         pnt = JointTrajectoryPoint()
@@ -357,7 +363,7 @@ class JointTrajectoryActionServer(object):
             while (not self._server.is_new_goal_available() and self._alive
                    and self.robot_is_enabled()):
                 if self._pimp:
-                    applied_joint_angles = self._pimp.compute_output(joint_names, list(joint_angles.values()), self._limb.joint_velocities(), self._pimp_force)
+                    applied_joint_angles = self._pimp.compute_output(joint_names, self._reorder_joint_values(joint_names, joint_angles), self._limb.joint_velocities(), self._pimp_force)
                     applied_joint_angles = dict(zip(joint_names, applied_joint_angles))
                     self._pimp_force = np.zeros(6)
                     self._limb.set_joint_positions(applied_joint_angles, raw=raw_pos_mode)
