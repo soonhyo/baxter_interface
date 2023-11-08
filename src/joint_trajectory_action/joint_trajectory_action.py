@@ -212,7 +212,7 @@ class JointTrajectoryActionServer(object):
                                         msg.wrench.force.z,
                                         msg.wrench.torque.x,
                                         msg.wrench.torque.y,
-                                        msg.wrench.torque.z], dtype=np.float32)
+                                        msg.wrench.torque.z], dtype=np.float16)
 
     def _go_safe_mode(self,q_d, q):
         self.init_angles = q_d
@@ -358,8 +358,9 @@ class JointTrajectoryActionServer(object):
                    and self.robot_is_enabled()):
                 if self._pimp:
                     applied_joint_angles = self._pimp.compute_output(joint_names, list(joint_angles.values()), self._limb.joint_velocities(), self._pimp_force)
+                    joint_angles = dict(zip(joint_names, applied_joint_angles))
                     self._pimp_force = np.zeros(6)
-                    self._limb.set_joint_positions(dict(zip(joint_names, applied_joint_angles)), raw=raw_pos_mode)
+                    self._limb.set_joint_positions(joint_angles, raw=raw_pos_mode)
                 else:
                     self._limb.set_joint_positions(joint_angles, raw=raw_pos_mode)
 

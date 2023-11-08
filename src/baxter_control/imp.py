@@ -48,12 +48,12 @@ class IMP(object):
         return np.clip(x, x_min, x_max)
 
     def set_K(self, stiffness_new):
-        stiffness_new = np.array(stiffness_new, dtype=np.float16)
+        stiffness_new = np.array(stiffness_new, dtype=np.float32)
         assert all(v >= 0 for v in stiffness_new), "Stiffness values need to be positive."
         self._cartesian_K_target = stiffness_new
 
     def set_D(self, damping_new):
-        damping_new = np.array(damping_new, dtype=np.float16)
+        damping_new = np.array(damping_new, dtype=np.float32)
         assert all(v >= 0 for v in damping_new), "Damping values need to be positive."
         self._cartesian_D_target = damping_new
 
@@ -122,7 +122,10 @@ class IMP(object):
 
         # print("endpoint_vel", endpoint_vel)
         # print("force", force)
-        diff_pose = -1.0* (force + self._cartesian_D * endpoint_vel) * self._cartesian_K
+        force_contact = 0
+        force_error = force - force_contact
+        print(force_error)
+        diff_pose = -1.0* (force_error + self._cartesian_D * endpoint_vel) * self._cartesian_K
         # print("diff pose", diff_pose)
         return diff_pose
 
@@ -139,8 +142,10 @@ class IMP(object):
         self._cur_time = rospy.get_time()
 
         dt = self._cur_time - self._prev_time
-
-        self._pointp_target = np.asarray(self._pointp + jacobian_pseudo_inv.dot(self._stiff_pose) * dt).ravel()
+        dp = jacobian_pseudo_inv.dot(self._stiff_pose) * dt
+        dp = np.clip(dp, -0.03, 0.03)
+        print("dp: ", dp)
+        self._pointp_target = np.asarray(self._pointp + dp).ravel()
         self.update_filtered_pointp()
 
         self._prev_time = self._cur_time
