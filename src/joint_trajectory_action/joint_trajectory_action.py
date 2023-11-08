@@ -358,9 +358,9 @@ class JointTrajectoryActionServer(object):
                    and self.robot_is_enabled()):
                 if self._pimp:
                     applied_joint_angles = self._pimp.compute_output(joint_names, list(joint_angles.values()), self._limb.joint_velocities(), self._pimp_force)
-                    joint_angles = dict(zip(joint_names, applied_joint_angles))
+                    applied_joint_angles = dict(zip(joint_names, applied_joint_angles))
                     self._pimp_force = np.zeros(6)
-                    self._limb.set_joint_positions(joint_angles, raw=raw_pos_mode)
+                    self._limb.set_joint_positions(applied_joint_angles, raw=raw_pos_mode)
                 else:
                     self._limb.set_joint_positions(joint_angles, raw=raw_pos_mode)
 

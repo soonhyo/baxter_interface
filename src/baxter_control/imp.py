@@ -1,7 +1,6 @@
 import rospy
 import numpy as np
 import tf.transformations
-from baxter_interface.cfg import CartesianImpedanceGainServerConfig
 import dynamic_reconfigure.client
 
 class IMP(object):
@@ -143,7 +142,7 @@ class IMP(object):
 
         dt = self._cur_time - self._prev_time
         dp = jacobian_pseudo_inv.dot(self._stiff_pose) * dt
-        dp = np.clip(dp, -0.03, 0.03)
+        # dp = np.clip(dp, -0.03, 0.03)
         print("dp: ", dp)
         self._pointp_target = np.asarray(self._pointp + dp).ravel()
         self.update_filtered_pointp()
