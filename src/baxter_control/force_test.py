@@ -12,7 +12,7 @@ def wrench_publisher():
 
     # 발행할 메시지의 빈 틀 설정
     wrench_stamped = WrenchStamped()
-    wrench_stamped.header.frame_id = 'right_gripper'
+    wrench_stamped.header.frame_id = 'left_gripper'
     wrench_stamped.wrench.force.x = 0.0
     wrench_stamped.wrench.force.z = 0.0
     wrench_stamped.wrench.torque.x = 0.0
@@ -22,11 +22,11 @@ def wrench_publisher():
     # 발행 주기 설정 (50Hz)
     rate = rospy.Rate(100)
 
-    gain = 5
+    gain = 2
     # 시작 시간
     start_time = rospy.get_time()
 
-    ramda = 2
+    ramda = 0.1
     offset = 0
     while not rospy.is_shutdown():
         # 현재 시간
