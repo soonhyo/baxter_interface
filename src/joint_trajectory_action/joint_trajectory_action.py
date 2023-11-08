@@ -216,7 +216,7 @@ class JointTrajectoryActionServer(object):
 
     def _go_safe_mode(self,q_d, q):
         self.init_angles = q_d
-        if (np.abs(np.array(self._reordered_joint_values(init_angles))) - np.array(self._reordered_joint_values(q))) > self._safe_margin).any(axis=0):
+        if (np.abs(np.array(self._reordered_joint_values(self.init_angles))) - np.array(self._reordered_joint_values(q)) > self._safe_margin).any(axis=0):
             rospy.logwarn(".........Go safe mode..........")
             self._limb.exit_control_mode()
             self._move_to_ready(self.init_angles)
