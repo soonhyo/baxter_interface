@@ -114,8 +114,8 @@ class JointTrajectoryActionServer(object):
 
         # Controller parameters from arguments, messages, and dynamic
         # reconfigure
-        self._control_rate = rate  # Hz
-        self._control_rate_ = rospy.Rate(rate)
+        # self._control_rate = rate  # Hz
+        self._control_rate = rospy.Rate(rate)
         self._control_joints = []
         self._pid_gains = {'kp': dict(), 'ki': dict(), 'kd': dict()}
         self._goal_time = 0.0
@@ -167,7 +167,7 @@ class JointTrajectoryActionServer(object):
 
         if self._mode == 'cart_impedance':
             self._kin = baxter_kinematics(self._name)
-            self._cart_imp = baxter_control.CartesianImpedanceController(self._limb, self._kin, self._control_rate)
+            self._cart_imp = baxter_control.CartesianImpedanceController(self._limb, self._kin, rate)
             # self._cart_imp = baxter_control.CartIMP(name=self._name, kin=self._kin, limb=self._limb)
 
         if self._pimp:
@@ -184,7 +184,7 @@ class JointTrajectoryActionServer(object):
             '/robot/joint_state_publish_rate',
              UInt16,
              queue_size=10)
-        self._pub_rate.publish(self._control_rate)
+        self._pub_rate.publish(rate)
 
         self._pub_ff_cmd = rospy.Publisher(
             self._ns + '/inverse_dynamics_command',
@@ -350,7 +350,8 @@ class JointTrajectoryActionServer(object):
                 if self._cuff_state:
                     self._limb.exit_control_mode()
                     break
-                rospy.sleep(1.0 / self._control_rate)
+                # rospy.sleep(1.0 / self._control_rate)
+                self._control_rate.sleep()
         elif self._mode == 'position' or self._mode == 'position_w_id':
             raw_pos_mode = (self._mode == 'position_w_id')
             if raw_pos_mode:
@@ -378,7 +379,8 @@ class JointTrajectoryActionServer(object):
                 if self._cuff_state:
                     self._limb.exit_control_mode()
                     break
-                rospy.sleep(1.0 / self._control_rate)
+                # rospy.sleep(1.0 / self._control_rate)
+                self._control_rate.sleep()
         elif self._mode == 'cart_impedance':
             # q_d = joint_angles
             q_d = self.last_point
@@ -401,7 +403,7 @@ class JointTrajectoryActionServer(object):
                     self._limb.exit_control_mode()
                     break
                 # rospy.sleep(1.0 / self._control_rate)
-                self._control_rate_.sleep()
+                self._control_rate.sleep()
 
     def _command_joints(self, joint_names, point, start_time, dimensions_dict):
         if self._server.is_preempt_requested() or not self.robot_is_enabled():
@@ -584,8 +586,8 @@ class JointTrajectoryActionServer(object):
         rospy.loginfo("%s: Executing requested joint trajectory" %
                       (self._action_name,))
         rospy.logdebug("Trajectory Points: {0}".format(trajectory_points))
-        control_rate = rospy.Rate(self._control_rate)
-
+        # control_rate = rospy.Rate(self._control_rate)
+        
         dimensions_dict = self._determine_dimensions(trajectory_points)
 
         if num_points == 1:
@@ -694,7 +696,7 @@ class JointTrajectoryActionServer(object):
             # Release the Mutex
             if not command_executed:
                 return
-            control_rate.sleep()
+            self._control_rate.sleep()
         # Keep trying to meet goal until goal_time constraint expired
         if self._pimp:
             trajectory_points[-1].positions = self._pimp.compute_output(joint_names, trajectory_points[-1].positions, self._limb.joint_velocities(), self._pimp_force)
@@ -723,7 +725,7 @@ class JointTrajectoryActionServer(object):
             now_from_start = rospy.get_time() - start_time
             self._update_feedback(deepcopy(last), joint_names,
                                   now_from_start)
-            control_rate.sleep()
+            self._control_rate.sleep()
 
         now_from_start = rospy.get_time() - start_time
         self._update_feedback(deepcopy(last), joint_names,
