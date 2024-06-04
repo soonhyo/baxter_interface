@@ -3,7 +3,7 @@ import numpy as np
 import tf.transformations
 import dynamic_reconfigure.client
 
-class IMP(object):
+class PIMP(object):
     # New attributes for stiffness control
     def __init__(self, kin=None, dyn=None, pointp=None):
         self._kin = kin
@@ -123,16 +123,10 @@ class IMP(object):
     
     def _stiff_cal(self, joint_names, force, joint_vel):
         endpoint_vel = np.asarray(self._kin.jacobian().dot(np.asarray(self._reorder_joint_values(joint_names ,joint_vel)).reshape(7,-1))).ravel()
-        # print("K", self._cartesian_K)
-        # print("D", self._cartesian_D)
-
-        # print("endpoint_vel", endpoint_vel)
-        # print("force", force)
         force_contact = 0
         force_error = force - force_contact
         print(force_error)
         diff_pose = -1.0* (force_error + self._cartesian_D * endpoint_vel) * self._cartesian_K
-        # print("diff pose", diff_pose)
         return diff_pose
 
     # Method for applying stiffness
