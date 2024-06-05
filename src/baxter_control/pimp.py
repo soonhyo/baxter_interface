@@ -56,9 +56,13 @@ class PIMP(object):
         assert all(v >= 0 for v in damping_new), "Damping values need to be positive."
         self._cartesian_D_target = damping_new
 
+    # def filter_step(self, update_frequency, filter_param):
+    #     kappa = - 1.0 / np.log(1 - min(filter_param, 0.999999))
+    #     return 1.0 / (kappa * update_frequency + 1.0)
+
     def filter_step(self, update_frequency, filter_param):
-        kappa = - 1.0 / np.log(1 - min(filter_param, 0.999999))
-        return 1.0 / (kappa * update_frequency + 1.0)
+        kappa = filter_param
+        return 1.0 / (kappa * (update_frequency - 1)+ 1.0)
 
     def filtered_update(self, target, current, step):
         target = np.asarray(target)
@@ -73,7 +77,6 @@ class PIMP(object):
         else:
             # print("params: ",self.filter_params)
             step = self.filter_step(self.update_frequency, self.filter_gains)
-            # print("step: ", step)
             self._cartesian_K = self.filtered_update(self._cartesian_K_target, self._cartesian_K, step)
             self._cartesian_D = self.filtered_update(self._cartesian_D_target, self._cartesian_D, step)
 
@@ -88,6 +91,7 @@ class PIMP(object):
         if self.filter_pointp == 1.0:
             self._pointp = np.copy(self._pointp_target)
         else:
+            print("step: ", step)
             step = self.filter_step(self.update_frequency, self.filter_pointp)
             self._pointp = self.filtered_update(self._pointp_target, self._pointp, step)
 
@@ -128,6 +132,24 @@ class PIMP(object):
         print(force_error)
         diff_pose = -1.0* (force_error + self._cartesian_D * endpoint_vel) * self._cartesian_K
         return diff_pose
+
+    # SR Inverse 계산 함수
+    def sr_inverse(self, jacobian, alpha=0.01):
+        """
+        Calculate the SR (Singular Robust) Inverse of a matrix.
+
+        Parameters:
+        jacobian (np.array): The Jacobian matrix.
+        alpha (float): Regularization parameter. Default is 0.01.
+
+        Returns:
+        np.array: The SR Inverse of the Jacobian matrix.
+        """
+        U, S, Vt = np.linalg.svd(jacobian)
+        S_inv = np.zeros_like(S)
+        for i in range(len(S)):
+            S_inv[i] = S[i] / (S[i]**2 + alpha**2)
+        return np.dot(Vt.T, np.dot(np.diag(S_inv), U.T))
 
     # Method for applying stiffness
     def compute_output(self, joint_names, pointp, joint_vel, force):
