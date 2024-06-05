@@ -158,6 +158,11 @@ class JointTrajectoryActionServer(object):
         for joint in self._limb.joint_names():
             self._pid[joint] = baxter_control.PID()
 
+        if self._mode == 'cart_impedance':
+            self._kin = baxter_kinematics(self._name)
+            self._cart_imp = baxter_control.CartesianImpedanceController(self._limb, self._kin, self._control_rate)
+            # self._cart_imp = baxter_control.CartIMP(name=self._name, kin=self._kin, limb=self._limb)
+
         if self._pimp:
             self._kin = baxter_kinematics(self._name)
             self._pimp = baxter_control.PIMP(self._kin, self._dyn, self._get_current_position(self._limb.joint_names()))
