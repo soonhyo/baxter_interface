@@ -28,4 +28,4 @@
 from .pid import PID
 from .cartesian_impedance import CartesianImpedanceController
 from .cart_imp import CartIMP
-from .imp import IMP
+from .pimp import PIMP

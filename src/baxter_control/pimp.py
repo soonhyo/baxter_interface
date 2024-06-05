@@ -4,7 +4,6 @@ import tf.transformations
 import dynamic_reconfigure.client
 
 class PIMP(object):
-    # New attributes for stiffness control
     def __init__(self, kin=None, dyn=None, pointp=None):
         self._kin = kin
         self._dyn = dyn
@@ -24,9 +23,9 @@ class PIMP(object):
         self._prev_time = self._cur_time
 
         self.trans_stf_min = 0.0
-        self.trans_stf_max = 10.0
+        self.trans_stf_max = 100.0
         self.rot_stf_min = 0.0
-        self.rot_stf_max = 10.0
+        self.rot_stf_max = 100.0
 
         self.trans_dmp_min = 0.0
         self.trans_dmp_max = 1.0
@@ -34,10 +33,6 @@ class PIMP(object):
         self.rot_dmp_max = 1.0
 
         self.update_frequency = 100
-
-        # self.filter_gains = rospy.set_param("~filtering/gains", 1.0)
-        # self.filter_wrench = rospy.set_param("~filtering/wrench", 1.0)
-        # self.filter_pointp = rospy.set_param("~filtering/pointp", 1.0)
 
         self.dyn_srv_wrench_param = dynamic_reconfigure.client.Client("position_imp", timeout=30, config_callback=self.dynamic_update)
 
@@ -56,13 +51,9 @@ class PIMP(object):
         assert all(v >= 0 for v in damping_new), "Damping values need to be positive."
         self._cartesian_D_target = damping_new
 
-    # def filter_step(self, update_frequency, filter_param):
-    #     kappa = - 1.0 / np.log(1 - min(filter_param, 0.999999))
-    #     return 1.0 / (kappa * update_frequency + 1.0)
-
     def filter_step(self, update_frequency, filter_param):
-        kappa = filter_param
-        return 1.0 / (kappa * (update_frequency - 1)+ 1.0)
+        kappa = 1 - filter_param
+        return 1.0 / (kappa * (update_frequency - 1) + 1.0)
 
     def filtered_update(self, target, current, step):
         target = np.asarray(target)
@@ -75,7 +66,6 @@ class PIMP(object):
             self._cartesian_K = np.copy(self._cartesian_K_target)
             self._cartesian_D = np.copy(self._cartesian_D_target)
         else:
-            # print("params: ",self.filter_params)
             step = self.filter_step(self.update_frequency, self.filter_gains)
             self._cartesian_K = self.filtered_update(self._cartesian_K_target, self._cartesian_K, step)
             self._cartesian_D = self.filtered_update(self._cartesian_D_target, self._cartesian_D, step)
@@ -91,7 +81,6 @@ class PIMP(object):
         if self.filter_pointp == 1.0:
             self._pointp = np.copy(self._pointp_target)
         else:
-            print("step: ", step)
             step = self.filter_step(self.update_frequency, self.filter_pointp)
             self._pointp = self.filtered_update(self._pointp_target, self._pointp, step)
 
@@ -117,8 +106,6 @@ class PIMP(object):
         self.filter_force = config['filter_force']
         self.filter_pointp = config['filter_pointp']
 
-        # Method for stiffness calculation
-
     def _reorder_joint_values(self, joint_order, joint_dict):
         reordered_joint_angles = []
         for jnt_name in joint_order:
@@ -127,13 +114,12 @@ class PIMP(object):
     
     def _stiff_cal(self, joint_names, force, joint_vel):
         endpoint_vel = np.asarray(self._kin.jacobian().dot(np.asarray(self._reorder_joint_values(joint_names ,joint_vel)).reshape(7,-1))).ravel()
-        force_contact = 0
-        force_error = force - force_contact
-        print(force_error)
+        target_force = rospy.get_param("~target_force", 0)
+        force_error = target_force - force
         diff_pose = -1.0* (force_error + self._cartesian_D * endpoint_vel) * self._cartesian_K
         return diff_pose
 
-    # SR Inverse 계산 함수
+    # SR Inverse calculation
     def sr_inverse(self, jacobian, alpha=0.01):
         """
         Calculate the SR (Singular Robust) Inverse of a matrix.
@@ -159,14 +145,15 @@ class PIMP(object):
         self.update_filtered_force()
 
         self._stiff_pose = self._stiff_cal(joint_names, self._force, joint_vel)
-        jacobian_pseudo_inv = np.linalg.pinv(self._kin.jacobian())
+
+        # jacobian_pseudo_inv = np.linalg.pinv(self._kin.jacobian())
+        jacobian_pseudo_inv = self.sr_inverse(self._kin.jacobian())
 
         self._cur_time = rospy.get_time()
 
         dt = self._cur_time - self._prev_time
         dp = jacobian_pseudo_inv.dot(self._stiff_pose) * dt
-        # dp = np.clip(dp, -0.03, 0.03)
-        print("dp: ", dp)
+
         self._pointp_target = np.asarray(self._pointp + dp).ravel()
         self.update_filtered_pointp()
 

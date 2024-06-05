@@ -158,15 +158,12 @@ class JointTrajectoryActionServer(object):
         for joint in self._limb.joint_names():
             self._pid[joint] = baxter_control.PID()
 
-        if self._mode == 'cart_impedance':
-            self._kin = baxter_kinematics(self._name)
-            self._cart_imp = baxter_control.CartesianImpedanceController(self._limb, self._kin, self._control_rate)
-            # self._cart_imp = baxter_control.CartIMP(name=self._name, kin=self._kin, limb=self._limb)
+        self.ext_force_topic = rospy.get_param("~external_force_topic","/comb/filtered_wrench")
 
         if self._pimp:
             self._kin = baxter_kinematics(self._name)
             self._pimp = baxter_control.PIMP(self._kin, self._dyn, self._get_current_position(self._limb.joint_names()))
-            self._sub_pimp = rospy.Subscriber("/comb/filtered_wrench", WrenchStamped, self._pimp_cb)
+            self._sub_pimp = rospy.Subscriber(self.ext_force_topic, WrenchStamped, self._pimp_cb)
 
         # Create our spline coefficients
         self._n_joints = len(self._limb.joint_names())
@@ -368,29 +365,6 @@ class JointTrajectoryActionServer(object):
                     self._limb.exit_control_mode()
                     break
                 rospy.sleep(1.0 / self._control_rate)
-        elif self._mode == 'cart_impedance':
-            # q_d = joint_angles
-            q_d = self.last_point
-
-            while (not self._server.is_new_goal_available() and self._alive
-                   and self.robot_is_enabled()):
-
-                q = dict(zip(joint_names,self._get_current_position(joint_names)))
-                dq = dict(zip(joint_names, self._get_current_velocities(joint_names)))
-                self._pub_cuff_disable.publish()
-
-                self._cart_imp.update(q, dq, q_d)
-                cmd = self._cart_imp.compute_output()
-
-                if self._safe_mode:
-                    self._go_safe_mode(self.last_point, q)
-
-                self._limb.set_joint_torques(cmd)
-                if self._cuff_state:
-                    self._limb.exit_control_mode()
-                    break
-                # rospy.sleep(1.0 / self._control_rate)
-                self._control_rate_.sleep()
 
     def _command_joints(self, joint_names, point, start_time, dimensions_dict):
         if self._server.is_preempt_requested() or not self.robot_is_enabled():

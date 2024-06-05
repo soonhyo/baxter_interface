@@ -69,9 +69,6 @@ def start_server(limb, rate, mode, interpolation, pimp):
     elif mode == 'position':
         dyn_cfg_srv = Server(PositionJointTrajectoryActionServerConfig,
                              lambda config, level: config)
-    elif mode == 'cart_impedance':
-        dyn_cfg_srv = Server(CartesianImpedanceJointTrajectoryActionServerConfig,
-                             lambda config, level: config, namespace="/CartesianImpedanceJointTrajectoryActionServer")
     else:
         dyn_cfg_srv = Server(PositionFFJointTrajectoryActionServerConfig,
                              lambda config, level: config, namespace="/position_imp")
