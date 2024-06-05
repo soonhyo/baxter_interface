@@ -145,10 +145,7 @@ class JointTrajectoryActionServer(object):
         self.last_point = []
 
         self._pimp = stiff
-        self._pimp_pose = np.zeros(6)
         self._pimp_force = np.zeros(6)
-        self._K = 5000.0
-        self._D = 0.001
 
         self._cur_time = rospy.get_time()
         self._prev_time = self._cur_time
@@ -158,7 +155,7 @@ class JointTrajectoryActionServer(object):
         for joint in self._limb.joint_names():
             self._pid[joint] = baxter_control.PID()
 
-        self.ext_force_topic = rospy.get_param("~external_force_topic","/comb/filtered_wrench")
+        self.ext_force_topic = rospy.get_param("~external_force_topic","/"+self._name+"/comb/filtered_wrench")
 
         if self._pimp:
             self._kin = baxter_kinematics(self._name)
@@ -192,38 +189,20 @@ class JointTrajectoryActionServer(object):
     def _cuff_cb(self, value):
         self._cuff_state = value
 
-    def _damping_rule(self, K):
-        return 2 * np.sqrt(K)
-
     def _pimp_cb(self, msg):
         self._pimp_frame = msg.header.frame_id
         self._pimp_force = np.asarray([msg.wrench.force.x,
-                                        msg.wrench.force.y,
-                                        msg.wrench.force.z,
-                                        msg.wrench.torque.x,
-                                        msg.wrench.torque.y,
-                                        msg.wrench.torque.z], dtype=np.float16)
-
-    def _go_safe_mode(self,q_d, q):
-        self.init_angles = q_d
-        if (np.abs(np.array(self._reordered_joint_values(self.init_angles))) - np.array(self._reordered_joint_values(q)) > self._safe_margin).any(axis=0):
-            rospy.logwarn(".........Go safe mode..........")
-            self._limb.exit_control_mode()
-            self._move_to_ready(self.init_angles)
-            self.emergency = True
+                                       msg.wrench.force.y,
+                                       msg.wrench.force.z,
+                                       msg.wrench.torque.x,
+                                       msg.wrench.torque.y,
+                                       msg.wrench.torque.z], dtype=np.float16)
 
     def _guarded_move_to_joint_position(self, joint_angles):
         if joint_angles:
             self._limb.move_to_joint_positions(joint_angles)
         else:
             rospy.logerr("No Joint Angles provided for move_to_joint_positions. Staying put.")
-
-    def _move_to_ready(self, joint_angles=None):
-        #print("Moving the {0} arm to start pose...".format(self._limb_name))
-        self._guarded_move_to_joint_position(joint_angles)
-        #self.gripper_open()
-        rospy.sleep(1.0)
-        rospy.loginfo("Running. Ctrl-c to quit")
 
     def _get_trajectory_parameters(self, joint_names, goal):
         # For each input trajectory, if path, goal, or goal_time tolerances
