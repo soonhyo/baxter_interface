@@ -114,8 +114,8 @@ class JointTrajectoryActionServer(object):
 
         # Controller parameters from arguments, messages, and dynamic
         # reconfigure
-        # self._control_rate = rate  # Hz
-        self._control_rate = rospy.Rate(rate)
+        self._control_rate = rate  # Hz
+        self._control_rate_ = rospy.Rate(rate)
         self._control_joints = []
         self._pid_gains = {'kp': dict(), 'ki': dict(), 'kd': dict()}
         self._goal_time = 0.0
@@ -172,7 +172,7 @@ class JointTrajectoryActionServer(object):
             '/robot/joint_state_publish_rate',
              UInt16,
              queue_size=10)
-        self._pub_rate.publish(rate)
+        self._pub_rate.publish(self._control_rate)
 
         self._pub_ff_cmd = rospy.Publisher(
             self._ns + '/inverse_dynamics_command',
@@ -334,8 +334,7 @@ class JointTrajectoryActionServer(object):
                 if self._cuff_state:
                     self._limb.exit_control_mode()
                     break
-                # rospy.sleep(1.0 / self._control_rate)
-                self._control_rate.sleep()
+                rospy.sleep(1.0 / self._control_rate)
         elif self._mode == 'position' or self._mode == 'position_w_id':
             raw_pos_mode = (self._mode == 'position_w_id')
             if raw_pos_mode:
@@ -363,8 +362,30 @@ class JointTrajectoryActionServer(object):
                 if self._cuff_state:
                     self._limb.exit_control_mode()
                     break
+                rospy.sleep(1.0 / self._control_rate)
+        elif self._mode == 'cart_impedance':
+            # q_d = joint_angles
+            q_d = self.last_point
+
+            while (not self._server.is_new_goal_available() and self._alive
+                   and self.robot_is_enabled()):
+
+                q = dict(zip(joint_names,self._get_current_position(joint_names)))
+                dq = dict(zip(joint_names, self._get_current_velocities(joint_names)))
+                self._pub_cuff_disable.publish()
+
+                self._cart_imp.update(q, dq, q_d)
+                cmd = self._cart_imp.compute_output()
+
+                if self._safe_mode:
+                    self._go_safe_mode(self.last_point, q)
+
+                self._limb.set_joint_torques(cmd)
+                if self._cuff_state:
+                    self._limb.exit_control_mode()
+                    break
                 # rospy.sleep(1.0 / self._control_rate)
-                self._control_rate.sleep()
+                self._control_rate_.sleep()
 
     def _command_joints(self, joint_names, point, start_time, dimensions_dict):
         if self._server.is_preempt_requested() or not self.robot_is_enabled():
@@ -531,8 +552,8 @@ class JointTrajectoryActionServer(object):
         rospy.loginfo("%s: Executing requested joint trajectory" %
                       (self._action_name,))
         rospy.logdebug("Trajectory Points: {0}".format(trajectory_points))
-        # control_rate = rospy.Rate(self._control_rate)
-        
+        control_rate = rospy.Rate(self._control_rate)
+
         dimensions_dict = self._determine_dimensions(trajectory_points)
 
         if num_points == 1:
@@ -641,7 +662,7 @@ class JointTrajectoryActionServer(object):
             # Release the Mutex
             if not command_executed:
                 return
-            self._control_rate.sleep()
+            control_rate.sleep()
         # Keep trying to meet goal until goal_time constraint expired
         if self._pimp:
             trajectory_points[-1].positions = self._pimp.compute_output(joint_names, trajectory_points[-1].positions, self._limb.joint_velocities(), self._pimp_force)
@@ -670,7 +691,7 @@ class JointTrajectoryActionServer(object):
             now_from_start = rospy.get_time() - start_time
             self._update_feedback(deepcopy(last), joint_names,
                                   now_from_start)
-            self._control_rate.sleep()
+            control_rate.sleep()
 
         now_from_start = rospy.get_time() - start_time
         self._update_feedback(deepcopy(last), joint_names,
